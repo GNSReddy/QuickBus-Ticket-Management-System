@@ -1,5 +1,6 @@
 import java.util.*;
 
+
 public class TicketSystem {
 
     private static final List<Route> routes = new ArrayList<>();
@@ -11,7 +12,7 @@ public class TicketSystem {
         Scanner sc = new Scanner(System.in);
         int choice;
 
-        System.out.println("=== QuickBus Ticket Management System (v1.0) ===");
+        System.out.println("=== QuickBus Ticket Management System (v2.0) ===");
 
         do {
             showMainMenu();
@@ -23,11 +24,13 @@ public class TicketSystem {
                 case 3 -> buyTicket(sc);
                 case 4 -> cancelTicket(sc);
                 case 5 -> viewBookings();
-                case 6 -> System.out.println("Exiting. Thank you for using QuickBus.");
+                case 6 -> runAdminMenu(sc);
+                case 7 -> showSummary();
+                case 8 -> System.out.println("Exiting. Thank you for using QuickBus.");
                 default -> System.out.println("Invalid choice. Try again.");
             }
 
-        } while (choice != 6);
+        } while (choice != 8);
 
         sc.close();
     }
@@ -39,10 +42,16 @@ public class TicketSystem {
         System.out.println("3. Buy Ticket");
         System.out.println("4. Cancel Ticket");
         System.out.println("5. View All Bookings");
-        System.out.println("6. Exit");
+        System.out.println("6. Admin Menu");
+        System.out.println("7. Show Summary");
+        System.out.println("8. Exit");
     }
 
     private static void showRoutesOnlyNames() {
+        if (routes.isEmpty()) {
+            System.out.println("No routes available.");
+            return;
+        }
         System.out.println("\n--- Available Routes ---");
         for (Route r : routes) {
             System.out.println("ID " + r.getId() + ": " + r.getName());
@@ -65,6 +74,12 @@ public class TicketSystem {
         System.out.println("Total Seats: " + r.getTotalSeats());
         System.out.println("Available Seats: " + r.getAvailableSeats());
         System.out.println("Schedule: " + Arrays.toString(r.getSchedule()));
+        List<Integer> booked = r.getBookedSeats();
+        if (booked.isEmpty()) {
+            System.out.println("No booked seats on this route.");
+        } else {
+            System.out.println("Booked seats: " + booked);
+        }
     }
 
     private static void buyTicket(Scanner sc) {
@@ -85,6 +100,10 @@ public class TicketSystem {
         sc.nextLine();
         System.out.print("Enter passenger name: ");
         String name = sc.nextLine().trim();
+        if (name.isEmpty()) {
+            System.out.println("Passenger name cannot be empty.");
+            return;
+        }
 
         int seat = r.allocateSeat();
         int ticketId = ++ticketCounter;
@@ -97,6 +116,11 @@ public class TicketSystem {
     }
 
     private static void cancelTicket(Scanner sc) {
+        if (tickets.isEmpty()) {
+            System.out.println("There are no bookings to cancel.");
+            return;
+        }
+
         int id = readInt(sc, "Enter ticket ID: ");
 
         Ticket t = tickets.remove(id);
@@ -112,12 +136,115 @@ public class TicketSystem {
     }
 
     private static void viewBookings() {
+        if (tickets.isEmpty()) {
+            System.out.println("No bookings yet.");
+            return;
+        }
         System.out.println("\n--- All Bookings ---");
         for (Ticket t : tickets.values()) {
             System.out.println(t);
         }
     }
 
+    // ---------------- Admin Module ----------------
+    private static void runAdminMenu(Scanner sc) {
+        sc.nextLine();
+        System.out.print("Enter admin password: ");
+        String pass = sc.nextLine().trim();
+
+        if (!"admin123".equals(pass)) {
+            System.out.println("Incorrect password!");
+            return;
+        }
+
+        int choice;
+        do {
+            System.out.println("\n--- Admin Menu ---");
+            System.out.println("1. Add Route");
+            System.out.println("2. Remove Route");
+            System.out.println("3. Back to Main Menu");
+            choice = readInt(sc, "Enter choice: ");
+
+            switch (choice) {
+                case 1 -> addRoute(sc);
+                case 2 -> removeRoute(sc);
+                case 3 -> System.out.println("Returning to main menu...");
+                default -> System.out.println("Invalid option.");
+            }
+        } while (choice != 3);
+    }
+
+    private static void addRoute(Scanner sc) {
+        sc.nextLine();
+        System.out.print("Enter route name (e.g., City A to City B): ");
+        String name = sc.nextLine().trim();
+        if (name.isEmpty()) {
+            System.out.println("Route name cannot be empty.");
+            return;
+        }
+
+        int fare = readInt(sc, "Enter fare Rs: ");
+        int seats = readInt(sc, "Enter total seats (>=40): ");
+        if (seats < 40) {
+            System.out.println("Seats must be at least 40. Setting to 40.");
+            seats = 40;
+        }
+
+        sc.nextLine();
+        System.out.print("Enter schedule times separated by commas (e.g., 08:00,12:30): ");
+        String scheduleLine = sc.nextLine().trim();
+        String[] schedule = scheduleLine.isEmpty() ? new String[0]
+                : Arrays.stream(scheduleLine.split(",")).map(String::trim).toArray(String[]::new);
+
+        int newId = routes.stream().mapToInt(Route::getId).max().orElse(0) + 1;
+        Route r = new Route(newId, name, fare, seats, schedule);
+        routes.add(r);
+        System.out.println("Route added with ID " + r.getId());
+    }
+
+    private static void removeRoute(Scanner sc) {
+        if (routes.isEmpty()) {
+            System.out.println("No routes to remove.");
+            return;
+        }
+        System.out.println("\nAvailable routes:");
+        for (Route r : routes) {
+            System.out.println("ID " + r.getId() + ": " + r.getName());
+        }
+        int rid = readInt(sc, "Enter route id to remove: ");
+        Route r = findRouteById(rid);
+        if (r == null) {
+            System.out.println("Route not found.");
+            return;
+        }
+
+        List<Integer> toRemove = new ArrayList<>();
+        for (Ticket t : tickets.values()) {
+            if (t.getRouteId() == rid) toRemove.add(t.getTicketId());
+        }
+        for (int id : toRemove) tickets.remove(id);
+
+        routes.remove(r);
+        System.out.println("Route removed and " + toRemove.size() + " related tickets removed");
+    }
+
+    // ---------------- Summary ----------------
+    private static void showSummary() {
+        System.out.println("\n--- Ticket Sales Summary ---");
+        if (routes.isEmpty()) {
+            System.out.println("No routes available.");
+            return;
+        }
+
+        int totalTickets = tickets.size();
+        for (Route r : routes) {
+            long sold = tickets.values().stream().filter(t -> t.getRouteId() == r.getId()).count();
+            System.out.printf("Route ID %d - %s : Tickets Sold = %d%n", r.getId(), r.getName(), sold);
+        }
+        System.out.println("TOTAL TICKETS SOLD = " + totalTickets);
+    }
+
+    // ---------------- Utilities ----------------
     private static Route findRouteById(int id) {
         for (Route r : routes)
             if (r.getId() == id) return r;
@@ -137,13 +264,11 @@ public class TicketSystem {
     }
 
     private static void seedData() {
-        // seats are set to values > 40 as requested
+        // seats already >= 40
         routes.add(new Route(1, "City Center to Airport", 120, 40,
                 new String[]{"06:00", "09:00", "12:00", "15:00"}));
-
         routes.add(new Route(2, "Station to Tech Park", 80, 46,
                 new String[]{"07:30", "10:30", "14:30"}));
-
         routes.add(new Route(3, "Market to University", 50, 50,
                 new String[]{"08:00", "11:00", "14:00"}));
     }
@@ -192,6 +317,13 @@ class Route {
     public void freeSeat(int seatNo) {
         if (seatNo >= 1 && seatNo <= totalSeats)
             seats[seatNo] = false;
+    }
+
+    public List<Integer> getBookedSeats() {
+        List<Integer> list = new ArrayList<>();
+        for (int i = 1; i <= totalSeats; i++)
+            if (seats[i]) list.add(i);
+        return list;
     }
 }
 
